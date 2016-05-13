@@ -1,0 +1,232 @@
+<dom-module id="taaabs-resource-loader">
+  <script>
+
+    TaaabsResourceLoader = Polymer({
+      is: 'taaabs-resource-loader',
+      properties: {
+
+
+        /**
+        * List of the resources loaded and shared.
+        *
+        * Is an Array of the following Objects :
+        *
+        *     { url: <RESOURCE_URL>,
+        *     resource: <RESOURCE_OBJECT>,
+        *     count: <NUMBER_OF_COMPONENTS_CURRENTLY_USING_THE_RESOURCE> }
+        *
+        * @attribute resources
+        * @type Array
+        */
+        resources: {
+          type: Array,
+          value: [],
+          notify: true
+        },
+
+        /**
+        * List of the resources waiting to be loaded.
+        *
+        * Is an Array of the following Objects :
+        *
+        *     { resource: <THE_RESOURCE>,
+        *     objName: <NAME_OF_THE_RESOURCE_IN_THE_TARGET_COMPONENT>,
+        *     sourceComponent: <THE_COMPONENT_WAITING_FOR_THE_RESOURCE>,
+        *     exists: <TRUE_IF_THE_RESOURCE_ONLY_NEEDS_TO_BE_LOADED_AGAIN> }
+        *
+        * @attribute loadingList
+        * @type Array
+        */
+        loadingList: {
+          type: Array,
+          notify: true,
+          value: []
+        },
+
+        /**
+        * True if the `taaabs-resource-loader` is currently loading a resource.
+        * False otherwise.
+        *
+        * @attribute isLoading
+        * @type Boolean
+        */
+        isLoading: {
+          type: Boolean,
+          notify: true,
+          value: false
+        }
+      },
+
+      ready: function(){
+        // Get the child nodes of the resource.
+        // For each child, if their `taaabs-central-loading` is true, listen to
+        // GET_RESOURCE, DROP_RESOURCE and UPDATE_RESOURCE
+        var effectiveChildren = Polymer.dom(this).getEffectiveChildNodes();
+        for(var i = 0 ; i < effectiveChildren.length; i++){
+          if( effectiveChildren[i].getAttribute && effectiveChildren[i].getAttribute('taaabs-central-loading') !== null )
+            this.listenChild(effectiveChildren[i]);
+        }
+      },
+
+      /**
+      * Check is a resource is already in `resources`, by comparing each resource
+      * uri with the paramater `url`.
+      *
+      * Returns `null` if the resource doesn' exists.
+      *
+      * @attribute {!required} url (String) The resource url.
+      *
+      * @method _isAlreadyLoaded
+      */
+      _isAlreadyLoaded: function( url ){
+        for( var i = 0; i < this.resources.length; i++ ){
+          if( this.resources[i].url === url)
+            return this.resources[i];
+        }
+        return null;
+      },
+
+      /**
+      * If `isLoading` is false ( `taaabs-taaabs` is not loading a resource ) and
+      * if there is at least one resource waiting in `loadingList`, load the first
+      * one of `loadingList`.
+      *
+      * Then, pop that resource from `loadingList`, and call `_loadResource`.
+      *
+      * @method _loadResource
+      */
+      _loadResource: function(){
+          if( !this.isLoading && this.loadingList.length > 0 ){
+            // We're now loading. Cheers!
+            this.isLoading = true;
+
+            // We pick the first resource waiting.
+            var resourceObject = this.loadingList[0];
+            this.loadingList.splice(0,1);
+
+            var that = this;
+
+            // Loads the resource.
+            resourceObject.resource.load()
+              .then(function(resource){
+                // We just notify the component that it's resource has been updated.
+                // And we call `_loadResource`, again.
+                if(resourceObject.exists){
+                  resourceObject.sourceComponent.set(resourceObject.objName,resourceObject.resource);
+                  that.isLoading = false;
+                  that._loadResource();
+                }
+                // We had the new resource to `resources` and set the component resource too.
+                // And we call `_loadResource`, again.
+                else{
+                  resourceObject.sourceComponent.set(resourceObject.objName,resource);
+                  that.push('resources',
+                    { url: resource.uri,
+                      resource: resource,
+                      count: 1 });
+                  that.isLoading = false;
+                  that._loadResource();
+                }
+              })
+              .catch( function(err){
+                console.log(err);
+                that.isLoading = false;
+                that._loadResource();
+              })
+          }
+      },
+
+      /**
+      * Set the taaabs component policy ont eh events `GET_RESOURCE`, `DROP_RESOURCE`
+      * and `UPDATE_RESOURCE`.
+      *
+      * `DROP_RESOURCE` must be called if and only if the component actually has
+      * a resuorce loaded.
+      *
+      * @attribute {!required} c (DOM Object) The component we must listen.
+      *
+      * @method listenChild
+      */
+      listenChild: function(c){
+        var that = this;
+
+        // If the resource already is in `resources`, just increases its counter,
+        // and set the component resource with it.
+        // If the resource hasn't been load yet, we put it in the waiting list.
+        c.addEventListener('GET_RESOURCE', function(e){
+          var resUrl = e.detail.url;
+          var objName = e.detail.obj;
+          var sourceComponent = e.target;
+          var _resource = that._isAlreadyLoaded( resUrl );
+          if( _resource !== null ){
+            _resource.count = _resource.count + 1;
+            sourceComponent.set(objName,_resource.resource);
+          }
+          else{
+            var tmpRes = new Samotraces.Ktbs.Resource(e.detail.url,e.detail.url);
+            that.push('loadingList', {
+              resource: tmpRes,
+              objName: objName,
+              sourceComponent: sourceComponent,
+              exists: false
+            })
+            that._loadResource();
+          }
+        })
+
+        // If the component resource exists, we unset it. If it was the last one
+        // in `resources`, we delete the resource in `taaabs-taaabs`.
+        c.addEventListener('DROP_RESOURCE', function(e){
+          var resUrl = e.detail.url;
+          var objName = e.detail.obj;
+          var sourceComponent = e.target;
+          var _resource = that._isAlreadyLoaded( resUrl );
+          if( _resource !== null && objName === null ){
+            _resource.count = _resource.count - 1;
+            if( _resource.count <= 0 ){
+              var index = that.resources.indexOf(_resource);
+              that.resources.splice(index,1);
+            }
+          }
+          else if( _resource !== null && sourceComponent[objName] !== null ){
+            _resource.count = _resource.count - 1;
+            sourceComponent.set(objName,null);
+            if( _resource.count <= 0 ){
+              var index = that.resources.indexOf(_resource);
+              that.resources.splice(index,1);
+            }
+          }
+        })
+
+        // If the resource already is in `resources`, we load it again.
+        // If the resource hasn't been load yet, we put it in the waiting list.
+        c.addEventListener('UPDATE_RESOURCE', function(e){
+          var resUrl = e.detail.url;
+          var objName = e.detail.obj;
+          var sourceComponent = e.target;
+          var _resource = that._isAlreadyLoaded( resUrl );
+          if( _resource !== null ){
+            that.push('loadingList', {
+              resource: _resource.resource,
+              objName: objName,
+              sourceComponent: sourceComponent,
+              exists: true
+            })
+            that._loadResource();
+          }
+          else{
+            var tmpRes = new Samotraces.Ktbs.Resource(e.detail.url,e.detail.url);
+            that.push('loadingList', {
+              resource: tmpRes,
+              objName: objName,
+              sourceComponent: sourceComponent,
+              exists: false
+            })
+            that._loadResource();
+          }
+        })
+      }
+
+    });
+  </script>
+</dom-module>
