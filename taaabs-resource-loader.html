@@ -112,6 +112,7 @@
                 // We just notify the component that it's resource has been updated.
                 // And we call `_loadResource`, again.
                 if(resourceObject.exists){
+                  if(resourceObject.force) resourceObject.sourceComponent.set(resourceObject.objName, null);
                   resourceObject.sourceComponent.set(resourceObject.objName,resourceObject.resource);
                   that.isLoading = false;
                   that._loadResource();
@@ -119,6 +120,7 @@
                 // We had the new resource to `resources` and set the component resource too.
                 // And we call `_loadResource`, again.
                 else{
+                  if(resourceObject.force) resourceObject.sourceComponent.set(resourceObject.objName, null);
                   resourceObject.sourceComponent.set(resourceObject.objName,resource);
                   that.push('resources',
                     { url: resource.uri,
@@ -157,9 +159,11 @@
           var resUrl = e.detail.url;
           var objName = e.detail.obj;
           var sourceComponent = e.target;
+          var force = e.detail.force || false;
           var _resource = that._isAlreadyLoaded( resUrl );
           if( _resource !== null ){
             _resource.count = _resource.count + 1;
+            if(force) sourceComponent.set(objName,null);
             sourceComponent.set(objName,_resource.resource);
           }
           else{
@@ -168,7 +172,8 @@
               resource: tmpRes,
               objName: objName,
               sourceComponent: sourceComponent,
-              exists: false
+              exists: false,
+              force: force
             })
             that._loadResource();
           }
@@ -204,13 +209,15 @@
           var resUrl = e.detail.url;
           var objName = e.detail.obj;
           var sourceComponent = e.target;
+          var force = e.detail.force || false;
           var _resource = that._isAlreadyLoaded( resUrl );
           if( _resource !== null ){
             that.push('loadingList', {
               resource: _resource.resource,
               objName: objName,
               sourceComponent: sourceComponent,
-              exists: true
+              exists: true,
+              force: force
             })
             that._loadResource();
           }
@@ -220,7 +227,8 @@
               resource: tmpRes,
               objName: objName,
               sourceComponent: sourceComponent,
-              exists: false
+              exists: false,
+              force: force
             })
             that._loadResource();
           }
