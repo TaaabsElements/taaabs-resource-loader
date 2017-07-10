@@ -1,3 +1,28 @@
+<!--
+# taaabs-resource-loader
+
+`<taaabs-resource-loader>` loads and stores some kTBS resources.
+The main goal of this component is to make sure the resource loading requests won't saturate the kTBS server.
+
+## Example
+
+If you have several component that load kTBS resource on the same page, proceed as follows:
+
+    <taaabs-resource-loader resources={{shared_resources}} is-loading={{shared_loading_resources_status}} loading-list={{shared_loading_resources}}>
+      <taaabs-base-graph base-url="[[baseUrl]]" taaabs-central-loading>
+      </taaabs-base-graph>
+    </taaabs-resource-loader>
+
+    <taaabs-resource-loader resources={{shared_resources}} is-loading={{shared_loading_resources_status}} loading-list={{shared_loading_resources}}>
+      <taaabs-trace-details-container trace-url="[[traceUrl]]" taaabs-central-loading>
+      </taaabs-trace-details-container>
+    </taaabs-resource-loader>
+
+## TODO
+
+
+
+-->
 <dom-module id="taaabs-resource-loader">
   <template>
     <content></content>
@@ -15,8 +40,8 @@
         * Is an Array of the following Objects :
         *
         *     { url: <RESOURCE_URL>,
-        *     resource: <RESOURCE_OBJECT>,
-        *     count: <NUMBER_OF_COMPONENTS_CURRENTLY_USING_THE_RESOURCE> }
+        *       resource: <RESOURCE_OBJECT>,
+        *       count: <NUMBER_OF_COMPONENTS_CURRENTLY_USING_THE_RESOURCE> }
         *
         * @attribute resources
         * @type Array
@@ -161,7 +186,7 @@
         c.addEventListener('GET_RESOURCE', function(e){
           var resUrl = e.detail.url;
           var objName = e.detail.obj;
-          var sourceComponent = e.target;
+          var sourceComponent = e.detail.source || e.target;
           var force = e.detail.force || false;
           var _resource = that._isAlreadyLoaded( resUrl );
           if( _resource !== null ){
@@ -187,7 +212,7 @@
         c.addEventListener('DROP_RESOURCE', function(e){
           var resUrl = e.detail.url;
           var objName = e.detail.obj;
-          var sourceComponent = e.target;
+          var sourceComponent = e.detail.source || e.target;
           var _resource = that._isAlreadyLoaded( resUrl );
           if( _resource !== null && objName === null ){
             _resource.count = _resource.count - 1;
@@ -211,7 +236,7 @@
         c.addEventListener('UPDATE_RESOURCE', function(e){
           var resUrl = e.detail.url;
           var objName = e.detail.obj;
-          var sourceComponent = e.target;
+          var sourceComponent = e.detail.source || e.target;
           var force = e.detail.force || false;
           var _resource = that._isAlreadyLoaded( resUrl );
           if( _resource !== null ){
